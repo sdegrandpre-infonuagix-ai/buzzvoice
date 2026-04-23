@@ -133,7 +133,7 @@ app.post('/api/fetch-page', async (req, res) => {
     const dom = new JSDOM(html, { url });
     const reader = new Readability(dom.window.document);
     const article = reader.parse();
-    const webmcp = detectWebMCP(dom.window.document, html);
+    const webmcp = await detectWebMCP(dom.window.document, html, url);
 
     if (!article) {
       const bodyText = dom.window.document.body?.textContent?.trim() || '';
@@ -166,9 +166,89 @@ app.post('/api/fetch-page', async (req, res) => {
 });
 
 // ──────────────────────────────────────────────
+//  Imperative WebMCP Tool Extractor
+//  Parses a minified JS bundle for tool schemas
+// ──────────────────────────────────────────────
+function extractImperativeTools(jsText, pageUrl) {
+  const tools = [];
+  let pos = 0;
+
+  while (true) {
+    // Find pattern: name:`tool_name` (backtick or single/double quote)
+    const nameIdx = jsText.indexOf('name:`', pos);
+    if (nameIdx === -1) break;
+
+    // Must be inside an object — look for { within 10 chars before
+    const before = jsText.substring(Math.max(0, nameIdx - 10), nameIdx);
+    if (!before.includes('{')) { pos = nameIdx + 1; continue; }
+
+    const nameStart = nameIdx + 6;
+    const nameEnd   = jsText.indexOf('`', nameStart);
+    if (nameEnd === -1) { pos = nameIdx + 1; continue; }
+    const name = jsText.substring(nameStart, nameEnd);
+
+    // Find description
+    const descIdx = jsText.indexOf('description:`', nameIdx);
+    if (descIdx === -1 || descIdx > nameIdx + 600) { pos = nameIdx + 1; continue; }
+    const descStart = descIdx + 13;
+    const descEnd   = jsText.indexOf('`', descStart);
+    const description = jsText.substring(descStart, descEnd);
+
+    // Find inputSchema and count braces to get the full object
+    const schemaKeyIdx = jsText.indexOf('inputSchema:', nameIdx);
+    if (schemaKeyIdx === -1 || schemaKeyIdx > nameIdx + 2000) { pos = nameIdx + 1; continue; }
+    const schemaStart = jsText.indexOf('{', schemaKeyIdx);
+    let depth = 0, schemaEnd = schemaStart;
+    for (let i = schemaStart; i < Math.min(jsText.length, schemaStart + 3000); i++) {
+      if      (jsText[i] === '{') depth++;
+      else if (jsText[i] === '}') { depth--; if (depth === 0) { schemaEnd = i + 1; break; } }
+    }
+    const schemaStr = jsText.substring(schemaStart, schemaEnd)
+      .replace(/`([^`]*)`/g, '"$1"')       // backtick → double quotes
+      .replace(/([{,])(\s*)(\w+):/g, '$1$2"$3":')  // unquoted keys
+      .replace(/enum:\w+/g, 'enum:[]')      // variable enum refs
+      .replace(/,\s*([}\]])/g, '$1');       // trailing commas
+
+    let schema = null;
+    try { schema = JSON.parse(schemaStr); } catch (_) {}
+
+    const parameters = [];
+    if (schema?.properties) {
+      for (const [pname, pdef] of Object.entries(schema.properties)) {
+        parameters.push({
+          name:        pname,
+          description: pdef.description || '',
+          type:        pdef.type        || 'string',
+          required:    (schema.required || []).includes(pname),
+          ...(pdef.enum ? { options: pdef.enum.map(v => ({ value: v, label: v })) } : {}),
+        });
+      }
+    }
+
+    // Try to extract the navigation URL pattern from the execute function
+    const executeIdx = jsText.indexOf('execute:', schemaEnd);
+    let action = null;
+    if (executeIdx !== -1 && executeIdx < schemaEnd + 400) {
+      const snip = jsText.substring(executeIdx, executeIdx + 400);
+      // Look for quoted path starting with /
+      const urlMatch = snip.match(/['"` ](\/?[a-zA-Z0-9_/-]+\??[^'"` ]{0,60})['"` ]/);
+      if (urlMatch && urlMatch[1].startsWith('/')) {
+        try { action = new URL(urlMatch[1].split('?')[0], pageUrl).href; } catch (_) {}
+      }
+    }
+
+    if (name) {
+      tools.push({ name, description, parameters, tag: 'script', action, method: 'GET', source: 'imperative' });
+    }
+    pos = nameEnd + 1;
+  }
+  return tools;
+}
+
+// ──────────────────────────────────────────────
 //  WebMCP Detection
 // ──────────────────────────────────────────────
-function detectWebMCP(doc, html) {
+async function detectWebMCP(doc, html, pageUrl) {
   const tools = [];
 
   // 1. Declarative API — elements with mcp-tool / data-mcp-tool attributes
@@ -279,8 +359,30 @@ function detectWebMCP(doc, html) {
   // 3. Meta declaration
   const meta = !!doc.querySelector('meta[name="webmcp"], meta[name="mcp"]');
 
-  const compliant = mcpEls.length > 0 || imperative || meta;
-  const source    = mcpEls.length > 0 ? 'declarative' : imperative ? 'imperative' : meta ? 'meta' : 'none';
+  // 2b. If imperative but no tools yet — fetch JS bundles and extract tool schemas
+  if (tools.length === 0 && imperative && pageUrl) {
+    const scriptEls = Array.from(doc.querySelectorAll('script[src]'));
+    for (const el of scriptEls) {
+      const src = el.getAttribute('src');
+      if (!src) continue;
+      try {
+        const scriptUrl = new URL(src, pageUrl).href;
+        const r = await fetch(scriptUrl, { timeout: 12000, headers: { 'User-Agent': 'BuzzVoice/1.0' } });
+        if (!r.ok) continue;
+        const jsText = await r.text();
+        const extracted = extractImperativeTools(jsText, pageUrl);
+        if (extracted.length > 0) {
+          tools.push(...extracted);
+          break; // found tools — stop scanning more scripts
+        }
+      } catch (_) { /* skip unreadable scripts */ }
+    }
+  }
+
+  const compliant = mcpEls.length > 0 || (doc.querySelectorAll('[toolname]').length > 0) || imperative || meta || tools.length > 0;
+  const source    = tools.length > 0 && tools[0].source === 'imperative' ? 'imperative'
+                  : mcpEls.length > 0 || doc.querySelectorAll('[toolname]').length > 0 ? 'declarative'
+                  : imperative ? 'imperative' : meta ? 'meta' : 'none';
 
   return { compliant, tools, source };
 }
