@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="BuzzVoice — An audio-only web browser powered by xAI Grok. Browse the web entirely by voice with STT and TTS.">
+  <title>BuzzVoice — Audio Web Browser</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="index.css">
+</head>
+<body>
+  <!-- ═══════════ AMBIENT BACKGROUND ═══════════ -->
+  <div class="ambient-bg" aria-hidden="true">
+    <div class="ambient-orb ambient-orb--1"></div>
+    <div class="ambient-orb ambient-orb--2"></div>
+    <div class="ambient-orb ambient-orb--3"></div>
+  </div>
+
+  <!-- ═══════════ HEADER ═══════════ -->
+  <header id="app-header" class="app-header">
+    <div class="header-brand">
+      <div class="logo-icon" aria-hidden="true">
+        <svg viewBox="0 0 40 40" fill="none">
+          <circle cx="20" cy="20" r="18" stroke="url(#logoGrad)" stroke-width="2.5" fill="none"/>
+          <path d="M14 16 C14 12, 26 12, 26 16 L26 24 C26 28, 14 28, 14 24 Z" fill="url(#logoGrad)" opacity="0.3"/>
+          <rect x="18" y="10" width="4" height="16" rx="2" fill="url(#logoGrad)"/>
+          <line x1="15" y1="30" x2="25" y2="30" stroke="url(#logoGrad)" stroke-width="2" stroke-linecap="round"/>
+          <defs>
+            <linearGradient id="logoGrad" x1="0" y1="0" x2="40" y2="40">
+              <stop offset="0%" stop-color="#3b82f6"/>
+              <stop offset="100%" stop-color="#06b6d4"/>
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+      <h1 class="logo-text">Buzz<span class="logo-accent">Voice</span></h1>
+    </div>
+    <div class="header-status">
+      <div id="connection-indicator" class="status-dot status-dot--connected" title="Connected"></div>
+      <select id="voice-selector" class="voice-select" aria-label="Select TTS voice">
+        <option value="eve">Eve</option>
+        <option value="ara">Ara</option>
+        <option value="leo">Leo</option>
+        <option value="rex">Rex</option>
+        <option value="sal">Sal</option>
+      </select>
+    </div>
+  </header>
+
+  <!-- ═══════════ MAIN CONTENT ═══════════ -->
+  <main id="main-content" class="main-content">
+
+    <!-- ─── Current Page Info ─── -->
+    <section id="page-info-section" class="glass-card page-info" aria-label="Current page information">
+      <div class="page-info__header">
+        <div class="page-info__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10A15.3 15.3 0 0 1 12 2z"/>
+          </svg>
+        </div>
+        <div class="page-info__text">
+          <h2 id="page-title" class="page-info__title">Ready to Browse</h2>
+          <p id="page-url" class="page-info__url">Say "Go to" followed by a website name</p>
+        </div>
+      </div>
+      <p id="page-excerpt" class="page-info__excerpt"></p>
+    </section>
+
+    <!-- ─── Waveform Visualizer ─── -->
+    <section id="visualizer-section" class="glass-card visualizer-section" aria-label="Audio waveform visualizer">
+      <canvas id="waveform-canvas" class="waveform-canvas"></canvas>
+      <div id="visualizer-label" class="visualizer-label">Idle</div>
+    </section>
+
+    <!-- ─── Microphone Button ─── -->
+    <div class="mic-container">
+      <button id="mic-button" class="mic-button" aria-label="Start voice input" title="Click to speak">
+        <div class="mic-button__ripple" aria-hidden="true"></div>
+        <div class="mic-button__ripple mic-button__ripple--2" aria-hidden="true"></div>
+        <svg class="mic-button__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+          <line x1="12" y1="19" x2="12" y2="23"/>
+          <line x1="8" y1="23" x2="16" y2="23"/>
+        </svg>
+        <svg class="mic-button__icon mic-button__icon--stop" viewBox="0 0 24 24" fill="currentColor" style="display:none">
+          <rect x="6" y="6" width="12" height="12" rx="2"/>
+        </svg>
+      </button>
+      <p id="mic-hint" class="mic-hint">Tap to speak</p>
+    </div>
+
+    <!-- ─── Transcript / Activity Feed ─── -->
+    <section id="transcript-section" class="glass-card transcript-section" aria-label="Conversation transcript">
+      <h2 class="section-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="section-icon">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+        Activity
+      </h2>
+      <div id="transcript-feed" class="transcript-feed">
+        <div class="transcript-item transcript-item--system">
+          <span class="transcript-badge">System</span>
+          <p>Welcome to BuzzVoice! Tap the microphone and say a command like <strong>"Go to wikipedia.org"</strong> or <strong>"List favorites"</strong>.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── Links Panel ─── -->
+    <section id="links-section" class="glass-card links-section" style="display:none" aria-label="Page links">
+      <h2 class="section-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="section-icon">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+        </svg>
+        Links on Page
+      </h2>
+      <ol id="links-list" class="links-list"></ol>
+    </section>
+
+    <!-- ─── Favorites Panel ─── -->
+    <section id="favorites-section" class="glass-card favorites-section" aria-label="Saved favorites">
+      <h2 class="section-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="section-icon">
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+        </svg>
+        Favorites
+      </h2>
+
+      <!-- Manual add form -->
+      <form id="add-favorite-form" class="add-fav-form" autocomplete="off">
+        <div class="add-fav-row">
+          <input id="fav-url-input" type="url" class="fav-input" placeholder="https://example.com" aria-label="Website URL" required />
+          <input id="fav-keyword-input" type="text" class="fav-input" placeholder="Keyword (e.g. news)" aria-label="Keyword" required />
+          <button id="add-fav-btn" type="submit" class="add-fav-btn" aria-label="Add favorite">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+        </div>
+        <p id="add-fav-error" class="add-fav-error" style="display:none"></p>
+      </form>
+
+      <div id="favorites-list" class="favorites-list">
+        <p class="favorites-empty">No favorites yet. Add one above or say <strong>"Save this as [keyword]"</strong>.</p>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ═══════════ STATUS BAR ═══════════ -->
+  <footer id="status-bar" class="status-bar">
+    <span id="status-text" class="status-text">Ready</span>
+    <span id="webmcp-badge" class="status-webmcp" title="This page is WebMCP-compliant" style="display:none">
+      <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14">
+        <path d="M8 1a7 7 0 100 14A7 7 0 008 1zm3.5 5.5l-4 4a.5.5 0 01-.7 0l-2-2a.5.5 0 01.7-.7L7.1 9.4l3.6-3.6a.5.5 0 01.7.7z"/>
+      </svg>
+      WebMCP
+    </span>
+  </footer>
+
+  <script src="webmcp.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
