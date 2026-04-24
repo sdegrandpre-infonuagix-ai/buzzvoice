@@ -1,1 +1,1 @@
-Demo at [https://sdegrandpre-infonuagix-ai.gihub.io/buzzvoice/public/](https://sdegrandpre-infonuagix-ai.gihub.io/buzzvoice/public/)
+Demo at [https://sdegrandpre-infonuagix-ai.github.io/buzzvoice/public/](https://sdegrandpre-infonuagix-ai.github.io/buzzvoice/public/)
