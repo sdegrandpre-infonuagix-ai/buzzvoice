@@ -540,7 +540,9 @@
 
       if (result.tool) {
         const toolDef = state.pageWebmcpTools.find((t) => t.name === result.tool);
+
         if (toolDef?.action) {
+          // Tool has a server-side action URL — navigate to it
           try {
             const actionUrl = new URL(toolDef.action, state.currentUrl);
             const params    = result.params || {};
@@ -557,19 +559,14 @@
             }
           } catch { /* invalid URL — skip */ }
         } else {
-          // No action URL — client-side JS form (e.g. French Bistro dialog).
-          // Build a spoken summary of every field Grok filled in.
+          // Client-side JS tool (e.g. French Bistro with IndexedDB).
+          // result.reply already contains the full post-execution confirmation
+          // including the confirmation number — show it in the transcript.
           const params = result.params || {};
-          const fieldSummary = Object.entries(params)
-            .map(([k, v]) => `${k}: ${v}`)
-            .join(', ');
-          const confirmation = result.reply ||
-            `Reservation submitted with the following details: ${fieldSummary}`;
           addTranscript('system',
-            `✅ <strong>Form filled via WebMCP</strong><br>${
-              Object.entries(params).map(([k,v]) => `<em>${k}</em>: ${v}`).join('<br>')
+            `✅ <strong>Reservation confirmed via WebMCP</strong><br>${
+              Object.entries(params).map(([k, v]) => `<em>${k}</em>: ${v}`).join('<br>')
             }`);
-          await speak(confirmation);
         }
       }
     } catch (e) {

@@ -414,6 +414,8 @@ app.post('/api/grok-tool-call', async (req, res) => {
       }))
     }));
 
+    const today = new Date().toISOString().slice(0, 10);
+
     const response = await fetch('https://api.x.ai/v1/chat/completions', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${XAI_API_KEY}`, 'Content-Type': 'application/json' },
@@ -428,12 +430,15 @@ app.post('/api/grok-tool-call', async (req, res) => {
               + 'Rules:\n'
               + '- You MUST return a value for every parameter, even if you must infer a reasonable default.\n'
               + '- For "select" parameters, choose a value from the provided options list.\n'
-              + '- For date parameters, use ISO 8601 format (YYYY-MM-DD). Today is ' + new Date().toISOString().slice(0,10) + '.\n'
+              + '- For date parameters, use ISO 8601 format (YYYY-MM-DD). Today is ' + today + '.\n'
               + '- For time parameters, use HH:MM (24h) format.\n'
               + '- For number parameters, return a plain integer or decimal.\n'
               + '- If the user did not specify a value for a field, infer the most reasonable value from context or use a sensible default.\n'
+              + '- After selecting the tool and filling all params, SIMULATE the tool execution and produce a realistic post-execution reply as if the tool ran successfully.\n'
+              + '- If the tool is a reservation or booking tool, generate a realistic confirmation number (e.g. LPB-000001 for a bistro, RES-10042 for a hotel, etc.) and include it in the reply.\n'
+              + '- The "reply" field MUST be the FINAL spoken confirmation the user hears AFTER the tool executes — it should include the confirmation number, date, time, name, and any other key booking details.\n'
               + 'Respond ONLY with a valid JSON object in this exact shape: '
-              + '{ "tool": "<tool_name>", "method": "GET|POST", "params": { "<field_name>": "<value>", ... }, "reply": "<short spoken confirmation of what you are submitting>" }. '
+              + '{ "tool": "<tool_name>", "method": "GET|POST", "params": { "<field_name>": "<value>", ... }, "reply": "<complete post-execution spoken confirmation including confirmation number>" }. '
               + 'If no tool matches, set "tool" to null.',
           },
           {
